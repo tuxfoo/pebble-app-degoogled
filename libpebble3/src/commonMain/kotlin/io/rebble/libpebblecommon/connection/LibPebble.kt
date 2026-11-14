@@ -195,6 +195,16 @@ interface HealthDataApi {
     /** Returns activity overlay entries (Walk, Run, OpenWorkout types) in the range. */
     suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity>
 
+    /**
+     * Replaces an activity with an edited copy (type, start or duration changed). Later
+     * re-sends of [original] from the watch are ignored. Only the phone's copy changes; the
+     * watch keeps its own history.
+     */
+    suspend fun editActivity(original: OverlayDataEntity, edited: OverlayDataEntity)
+
+    /** Deletes an activity; later re-sends of it from the watch are ignored. */
+    suspend fun deleteActivity(original: OverlayDataEntity)
+
     /** Returns hourly typical (historical average) step counts for the given weekday.
      *  @param dayOfWeek kotlinx.datetime.DayOfWeek ordinal (0=Monday, 6=Sunday) */
     suspend fun getTypicalSteps(dayOfWeek: Int): List<Long>

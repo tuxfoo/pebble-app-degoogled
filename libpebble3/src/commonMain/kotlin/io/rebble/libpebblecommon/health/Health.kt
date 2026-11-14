@@ -247,6 +247,14 @@ class Health(
             OverlayType.Walk.value, OverlayType.Run.value, OverlayType.OpenWorkout.value
         ))
 
+    override suspend fun editActivity(original: OverlayDataEntity, edited: OverlayDataEntity) {
+        healthDao.editOverlay(original, edited)
+    }
+
+    override suspend fun deleteActivity(original: OverlayDataEntity) {
+        healthDao.deleteOverlayPermanently(original)
+    }
+
     override suspend fun getTypicalSteps(dayOfWeek: Int): List<Long> {
         val timeZone = TimeZone.currentSystemDefault()
         val today = System.now().toLocalDateTime(timeZone).date

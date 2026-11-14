@@ -48,6 +48,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.SuppressedOverlayEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -86,6 +87,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         VibePatternEntity::class,
         HealthDataEntity::class,
         OverlayDataEntity::class,
+        SuppressedOverlayEntity::class,
         HealthStatEntity::class,
         HealthStatSyncEntity::class,
         WatchPrefItemEntity::class,
@@ -96,7 +98,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
     ],
-    version = 45,
+    version = 46,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -133,6 +135,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 42, to = 43),
         AutoMigration(from = 43, to = 44),
         AutoMigration(from = 44, to = 45),
+        AutoMigration(from = 45, to = 46),
     ],
     exportSchema = true,
 )

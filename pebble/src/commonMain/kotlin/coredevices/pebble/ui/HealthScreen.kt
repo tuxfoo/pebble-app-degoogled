@@ -54,6 +54,7 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val dl by vm.dateLabel.collectAsState()
     val imperial by vm.imperialUnits.collectAsState()
     val hasHrmWatch by vm.hasHrmWatch.collectAsState()
+    val activities by vm.activities.collectAsState()
 
     LaunchedEffect(Unit) {
         topBarParams.title("Health")
@@ -71,6 +72,9 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             ActivityCard(act, vm.selectedTimeRange, imperial)
+            if (vm.selectedTimeRange == HealthTimeRange.Daily) {
+                ActivitiesCard(activities, vm::saveActivity, vm::deleteActivity)
+            }
             SleepCard(slp, vm.selectedTimeRange)
             if (hasHrmWatch) HeartRateCard(hr, vm.selectedTimeRange)
             TextButton(

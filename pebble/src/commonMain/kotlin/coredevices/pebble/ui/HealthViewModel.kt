@@ -11,6 +11,9 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.health.HealthTimeRange
 import io.rebble.libpebblecommon.health.OverlayType
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import coredevices.pebble.health.PlatformHealthSync
+import kotlinx.coroutines.flow.MutableSharedFlow
 import io.rebble.libpebblecommon.metadata.supportsHrm
 
 import io.rebble.libpebblecommon.services.DailySleep
@@ -97,6 +100,7 @@ data class HeartRateUiState(
 
 class HealthViewModel(
     private val libPebble: LibPebble,
+    private val platformHealthSync: PlatformHealthSync,
 ) : ViewModel() {
     var selectedTimeRange by mutableStateOf(HealthTimeRange.Daily)
     var dateOffset by mutableStateOf(0)
@@ -115,6 +119,10 @@ class HealthViewModel(
     val sleep: StateFlow<SleepUiState> = _sleep.asStateFlow()
     private val _heartRate = MutableStateFlow(HeartRateUiState())
     val heartRate: StateFlow<HeartRateUiState> = _heartRate.asStateFlow()
+    /** Activities of the selected day (daily view only), for listing and editing. */
+    private val _activities = MutableStateFlow<List<OverlayDataEntity>>(emptyList())
+    val activities: StateFlow<List<OverlayDataEntity>> = _activities.asStateFlow()
+    private val reload = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val _dateLabel = MutableStateFlow("")
     val dateLabel: StateFlow<String> = _dateLabel.asStateFlow()
 
@@ -123,6 +131,7 @@ class HealthViewModel(
             merge(
                 snapshotFlow { selectedTimeRange to dateOffset },
                 libPebble.healthDataUpdated.map { selectedTimeRange to dateOffset },
+                reload.map { selectedTimeRange to dateOffset },
             ).collectLatest { (range, offset) ->
                 loadData(range, offset)
             }
@@ -132,6 +141,28 @@ class HealthViewModel(
     fun onTimeRangeChanged(range: HealthTimeRange) {
         selectedTimeRange = range
         dateOffset = 0
+    }
+
+    /** Saves an edited activity (type and/or trimmed start/end), here and on the health platform. */
+    fun saveActivity(original: OverlayDataEntity, type: OverlayType, startEpochSec: Long, endEpochSec: Long) {
+        val edited = original.copy(
+            type = type.value,
+            startTime = startEpochSec,
+            duration = endEpochSec - startEpochSec,
+        )
+        if (edited == original || edited.duration <= 0) return
+        viewModelScope.launch {
+            platformHealthSync.editActivity(original, edited)
+            reload.tryEmit(Unit)
+        }
+    }
+
+    /** Deletes an activity here and from the health platform. */
+    fun deleteActivity(original: OverlayDataEntity) {
+        viewModelScope.launch {
+            platformHealthSync.deleteActivity(original)
+            reload.tryEmit(Unit)
+        }
     }
 
     fun navigateBack() { dateOffset-- }
@@ -181,6 +212,7 @@ class HealthViewModel(
         val sleepSession = sleepSessionD.await()
         val typicalSteps = typicalStepsD.await()
         val sessions = sessionsD.await()
+        _activities.value = sessions
 
         val hourlySteps = LongArray(24)
         val hrBuckets = Array<MutableList<Int>>(288) { mutableListOf() } // 5-minute resolution
@@ -241,6 +273,7 @@ class HealthViewModel(
     }
 
     private suspend fun loadWeekly(startDate: LocalDate, endDate: LocalDate, tz: TimeZone) {
+        _activities.value = emptyList()
         val startEpoch = startDate.atStartOfDayIn(tz).epochSeconds
         val endEpoch = endDate.plus(DatePeriod(days = 1)).atStartOfDayIn(tz).epochSeconds
         val dailyAggs = libPebble.getDailyAggregates(startEpoch, endEpoch)
@@ -259,6 +292,7 @@ class HealthViewModel(
     }
 
     private suspend fun loadMonthly(monthStart: LocalDate, monthEnd: LocalDate, tz: TimeZone) {
+        _activities.value = emptyList()
         val startEpoch = monthStart.atStartOfDayIn(tz).epochSeconds
         val endEpoch = monthEnd.plus(DatePeriod(days = 1)).atStartOfDayIn(tz).epochSeconds
         val dailyAggs = libPebble.getDailyAggregates(startEpoch, endEpoch)
@@ -450,7 +484,7 @@ internal fun buildDailySleepSegments(dayStart: Long, dailySleep: DailySleep?): L
         intervals.filter { it.isDeep }.mapNotNull { toSegment(it.start, it.end, true) }
 }
 
-private fun formatTimeOfDay(epochSec: Long, tz: TimeZone): String {
+internal fun formatTimeOfDay(epochSec: Long, tz: TimeZone): String {
     val dt = Instant.fromEpochSeconds(epochSec).toLocalDateTime(tz)
     val h = dt.hour; val m = dt.minute
     val ampm = if (h < 12) "AM" else "PM"

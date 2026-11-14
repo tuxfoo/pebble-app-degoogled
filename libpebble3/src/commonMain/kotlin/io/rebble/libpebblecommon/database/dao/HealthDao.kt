@@ -4,8 +4,10 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.SuppressedOverlayEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -135,6 +137,33 @@ interface HealthDao {
 
     @Query("DELETE FROM health_data WHERE timestamp < :expirationTimestamp")
     suspend fun deleteExpiredHealthData(expirationTimestamp: Long): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSuppressedOverlay(entry: SuppressedOverlayEntity)
+
+    @Query("SELECT COUNT(*) > 0 FROM suppressed_overlay WHERE startTime = :startTime AND type = :type")
+    suspend fun isOverlaySuppressed(startTime: Long, type: Int): Boolean
+
+    @Query("DELETE FROM overlay_data WHERE startTime = :startTime AND type = :type")
+    suspend fun deleteOverlay(startTime: Long, type: Int)
+
+    @Query("DELETE FROM suppressed_overlay WHERE startTime < :expirationTimestamp")
+    suspend fun deleteExpiredSuppressedOverlays(expirationTimestamp: Long): Int
+
+    /** Replaces [original] with [edited] and keeps watch re-sends of [original] out. */
+    @Transaction
+    suspend fun editOverlay(original: OverlayDataEntity, edited: OverlayDataEntity) {
+        insertSuppressedOverlay(SuppressedOverlayEntity(original.startTime, original.type))
+        deleteOverlay(original.startTime, original.type)
+        insertOverlayData(listOf(edited))
+    }
+
+    /** Deletes [original] and keeps watch re-sends of it out. */
+    @Transaction
+    suspend fun deleteOverlayPermanently(original: OverlayDataEntity) {
+        insertSuppressedOverlay(SuppressedOverlayEntity(original.startTime, original.type))
+        deleteOverlay(original.startTime, original.type)
+    }
 
     @Query("DELETE FROM overlay_data WHERE startTime < :expirationTimestamp")
     suspend fun deleteExpiredOverlayData(expirationTimestamp: Long): Int

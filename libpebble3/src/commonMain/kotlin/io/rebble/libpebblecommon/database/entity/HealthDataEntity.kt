@@ -34,3 +34,18 @@ data class OverlayDataEntity(
     val distanceCm: Int,
     val offsetUTC: Int
 )
+
+/**
+ * Original key (startTime + type) of an overlay the user edited or deleted on the phone. The
+ * watch can re-send overlays (see insertOverlayDataWithDeduplication); a re-sent copy of a
+ * suppressed key is ignored so the edit or deletion sticks. An edit is stored as a new
+ * [OverlayDataEntity] row under its new key.
+ */
+@Entity(
+    tableName = "suppressed_overlay",
+    primaryKeys = ["startTime", "type"]
+)
+data class SuppressedOverlayEntity(
+    val startTime: Long,
+    val type: Int,
+)

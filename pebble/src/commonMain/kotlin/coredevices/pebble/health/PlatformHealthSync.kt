@@ -4,8 +4,6 @@ import co.touchlab.kermit.Logger
 import com.viktormykhailiv.kmp.health.HealthDataType
 import com.viktormykhailiv.kmp.health.HealthManager
 import com.viktormykhailiv.kmp.health.HealthRecord
-import com.viktormykhailiv.kmp.health.records.ExerciseSessionRecord
-import com.viktormykhailiv.kmp.health.records.ExerciseType
 import com.viktormykhailiv.kmp.health.records.HeartRateRecord
 import com.viktormykhailiv.kmp.health.records.SleepSessionRecord
 import com.viktormykhailiv.kmp.health.records.SleepStageType
@@ -24,7 +22,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 internal expect fun exerciseWriteTypes(): List<HealthDataType>
@@ -40,6 +37,7 @@ class PlatformHealthSync(
     private val appResumed: AppResumed,
     private val healthManager: HealthManager,
     private val healthDataApi: HealthDataApi,
+    private val exerciseRecordWriter: ExerciseRecordWriter,
 ) {
     private val logger = Logger.withTag("PlatformHealthSync")
 
@@ -195,6 +193,34 @@ class PlatformHealthSync(
         }
     }
 
+    /**
+     * Edits an activity in the app and, if it reached the health platform, updates the
+     * platform record too (delete the old one, write the edited one).
+     */
+    suspend fun editActivity(original: OverlayDataEntity, edited: OverlayDataEntity) {
+        healthDataApi.editActivity(original, edited)
+        if (!platformMayHaveActivity()) return
+        exerciseRecordWriter.delete(original).onFailure {
+            logger.e(it) { "Failed to remove edited activity from health platform" }
+        }
+        exerciseRecordWriter.write(listOf(edited)).onFailure {
+            logger.e(it) { "Failed to write edited activity to health platform" }
+        }
+    }
+
+    /** Deletes an activity in the app and from the health platform. */
+    suspend fun deleteActivity(original: OverlayDataEntity) {
+        healthDataApi.deleteActivity(original)
+        if (!platformMayHaveActivity()) return
+        exerciseRecordWriter.delete(original).onFailure {
+            logger.e(it) { "Failed to remove deleted activity from health platform" }
+        }
+    }
+
+    /** Platform records can only be touched with sync on and the exercise permission granted. */
+    private suspend fun platformMayHaveActivity(): Boolean =
+        tracker.enabled.value && hasExercisePermission()
+
     private suspend fun hasExercisePermission(): Boolean = try {
         healthManager.isAuthorized(readTypes = emptyList(), writeTypes = OptionalExerciseWriteTypes)
             .getOrDefault(false)
@@ -247,39 +273,13 @@ class PlatformHealthSync(
         if (exerciseOverlays.isNotEmpty() && !writeExercise) {
             logger.d { "Exercise permission not granted; skipping ${exerciseOverlays.size} workouts" }
         }
-        val exerciseRecords = mutableListOf<HealthRecord>()
-        for (overlay in exerciseOverlays.takeIf { writeExercise }.orEmpty()) {
-            if (overlay.duration <= 0) continue
-            val startTime = Instant.fromEpochSeconds(overlay.startTime)
-            val endTime = startTime + overlay.duration.seconds
-
-            val overlayType = OverlayType.fromValue(overlay.type) ?: continue
-            val exerciseType = when (overlayType) {
-                OverlayType.Walk -> ExerciseType.Walking
-                OverlayType.Run -> ExerciseType.Running
-                OverlayType.OpenWorkout -> ExerciseType.OtherWorkout
-                else -> continue
-            }
-
-            exerciseRecords += ExerciseSessionRecord(
-                startTime = startTime,
-                endTime = endTime,
-                exerciseType = exerciseType,
-                title = when (overlayType) {
-                    OverlayType.Walk -> "Walk"
-                    OverlayType.Run -> "Run"
-                    OverlayType.OpenWorkout -> "Workout"
-                    else -> null
-                },
-                exerciseRoute = null,
-                metadata = createMetadata(overlay.startTime, "exercise"),
-            )
-        }
-        if (exerciseRecords.isNotEmpty()) {
-            val result = healthManager.writeData(exerciseRecords)
+        if (writeExercise) {
+            // Written directly with stable ids (see ExerciseRecordWriter) so in-app edits and
+            // deletes can find the record again.
+            val result = exerciseRecordWriter.write(exerciseOverlays)
             if (result.isSuccess) {
                 maxSyncedTimestamp = maxOf(maxSyncedTimestamp, exerciseOverlays.maxOf { it.startTime })
-                logger.d { "Synced ${exerciseRecords.size} exercise records" }
+                logger.d { "Synced ${exerciseOverlays.size} exercise records" }
             } else {
                 logger.e { "Failed to write exercise records: ${result.exceptionOrNull()}" }
             }

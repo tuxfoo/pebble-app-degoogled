@@ -10,6 +10,7 @@ import com.anopticlabs.gravel.ui.NotebookSetupViewModel
 import com.anopticlabs.gravel.ui.SetupSpeech
 import com.anopticlabs.gravel.ui.TextModelsViewModel
 import coredevices.pebble.health.createPlatformHealthManager
+import coredevices.pebble.health.createExerciseRecordWriter
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.FirestoreKnownWatchesDao
 import coredevices.pebble.account.FirestoreKnownWatchesSync
@@ -153,6 +154,8 @@ val watchModule = module {
     single { FirestoreKnownWatchesDao { get() } }
     // Fork: pins useGoogleFit=false on Android; see PlatformHealthManager.
     single { createPlatformHealthManager() }
+    // Fork: workouts go to the platform with stable ids (health-kmp drops them and can't delete).
+    single { createExerciseRecordWriter(get()) }
     singleOf(::RealFirestoreLocker) bind FirestoreLocker::class
     singleOf(::RealFirestoreKnownWatchesSync) bind FirestoreKnownWatchesSync::class
     singleOf(::RealAppstoreCache) bind AppstoreCache::class

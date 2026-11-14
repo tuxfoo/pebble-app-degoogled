@@ -61,6 +61,11 @@ suspend fun HealthDao.insertOverlayDataWithDeduplication(data: List<OverlayDataE
     var replaced = 0
 
     data.forEach { newData ->
+        if (isOverlaySuppressed(newData.startTime, newData.type)) {
+            // Edited or deleted by the user on the phone; ignore the watch's copy.
+            skipped++
+            return@forEach
+        }
         val existing = getOverlayAtStartTimeAndType(newData.startTime, newData.type)
         if (existing == null) {
             insertOverlayData(listOf(newData))
