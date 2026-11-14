@@ -11,6 +11,7 @@ import com.anopticlabs.gravel.ui.SetupSpeech
 import com.anopticlabs.gravel.ui.TextModelsViewModel
 import coredevices.pebble.health.createPlatformHealthManager
 import coredevices.pebble.health.createExerciseRecordWriter
+import coredevices.pebble.health.createRestingHeartRateWriter
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.FirestoreKnownWatchesDao
 import coredevices.pebble.account.FirestoreKnownWatchesSync
@@ -156,6 +157,8 @@ val watchModule = module {
     single { createPlatformHealthManager() }
     // Fork: workouts go to the platform with stable ids (health-kmp drops them and can't delete).
     single { createExerciseRecordWriter(get()) }
+    // Fork: resting HR goes to Health Connect directly (health-kmp has no such type).
+    single { createRestingHeartRateWriter(get()) }
     singleOf(::RealFirestoreLocker) bind FirestoreLocker::class
     singleOf(::RealFirestoreKnownWatchesSync) bind FirestoreKnownWatchesSync::class
     singleOf(::RealAppstoreCache) bind AppstoreCache::class

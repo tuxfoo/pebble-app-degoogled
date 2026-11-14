@@ -8,6 +8,7 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import com.viktormykhailiv.kmp.health.HealthManager
@@ -29,6 +30,8 @@ private val GRAVEL_HEALTH_PERMISSIONS = setOf(
     HealthPermission.getWritePermission(SleepSessionRecord::class),
     HealthPermission.getWritePermission(ExerciseSessionRecord::class),
     HealthPermission.PERMISSION_WRITE_EXERCISE_ROUTE,
+    // Optional, like exercise; asked in the same dialog so there's only one prompt.
+    HealthPermission.getWritePermission(RestingHeartRateRecord::class),
 )
 
 private object AppContextHolder : KoinComponent {
